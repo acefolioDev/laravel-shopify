@@ -41,24 +41,25 @@ class TokenExchange
      * @return Session The created or updated session
      * @throws TokenExchangeException
      */
-    public function exchange(string $shopDomain, string $sessionToken, bool $online = false): Session
-    {
-        $tokenType = $online
-            ? 'urn:ietf:params:oauth:token-type:access_token'
-            : 'urn:ietf:params:oauth:token-type:offline_access_token';
+ public function exchange(string $shopDomain, string $sessionToken, bool $online = false): Session
+{
+    // Fix: Use Shopify-specific URNs for requested_token_type
+    $tokenType = $online
+        ? 'urn:shopify:params:oauth:token-type:online-access-token'
+        : 'urn:shopify:params:oauth:token-type:offline-access-token';
 
-        try {
-            $response = $this->httpClient->post(
-                "https://{$shopDomain}/admin/oauth/access_token",
-                [
-                    'json' => [
-                        'client_id' => $this->apiKey,
-                        'client_secret' => $this->apiSecret,
-                        'grant_type' => 'urn:ietf:params:oauth:grant-type:token-exchange',
-                        'subject_token' => $sessionToken,
-                        'subject_token_type' => 'urn:ietf:params:oauth:token-type:id_token',
-                        'requested_token_type' => $tokenType,
-                    ],
+    try {
+        $response = $this->httpClient->post(
+            "https://{$shopDomain}/admin/oauth/access_token",
+            [
+                'json' => [
+                    'client_id' => $this->apiKey,
+                    'client_secret' => $this->apiSecret,
+                    'grant_type' => 'urn:ietf:params:oauth:grant-type:token-exchange',
+                    'subject_token' => $sessionToken,
+                    'subject_token_type' => 'urn:ietf:params:oauth:token-type:id_token',
+                    'requested_token_type' => $tokenType, // Shopify specific URN
+                ],
                     'headers' => [
                         'Content-Type' => 'application/json',
                         'Accept' => 'application/json',
@@ -245,5 +246,43 @@ class TokenExchange
         }
 
         return $this->exchange($shopDomain, $sessionToken, false);
+    }
+
+    /**
+     * Ensure a valid online session exists for the shop, performing token
+     * exchange as needed.
+     */
+    public function ensureOnlineSession(string $shopDomain, string $sessionToken): Session
+    {
+        $session = Session::forShop($shopDomain)->online()->valid()->first();
+
+        if ($session && ! $session->isExpired()) {
+            return $session;
+        }
+
+        return $this->exchange($shopDomain, $sessionToken, true);
+    }
+
+    /**
+     * Ensure a valid session exists using the configured access mode.
+     * Falls back to the other mode if the preferred one is rejected.
+     */
+    public function ensureSession(string $shopDomain, string $sessionToken, bool $online = false): Session
+    {
+        try {
+            return $online
+                ? $this->ensureOnlineSession($shopDomain, $sessionToken)
+                : $this->ensureOfflineSession($shopDomain, $sessionToken);
+        } catch (TokenExchangeException $e) {
+            // If offline exchange is rejected, fall back to online
+            if (! $online && str_contains($e->getMessage(), 'invalid_requested_token_type')) {
+                Log::info('[TokenExchange] Offline token exchange not supported, falling back to online.', [
+                    'shop' => $shopDomain,
+                ]);
+                return $this->ensureOnlineSession($shopDomain, $sessionToken);
+            }
+
+            throw $e;
+        }
     }
 }

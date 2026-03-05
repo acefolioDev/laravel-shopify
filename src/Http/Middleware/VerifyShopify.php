@@ -48,8 +48,10 @@ class VerifyShopify
 
         $shopDomain = $this->sessionToken->getShopDomain($payload);
 
+        $online = config('shopify-app.access_mode', 'offline') === 'online';
+
         try {
-            $session = $this->tokenExchange->ensureOfflineSession($shopDomain, $rawToken);
+            $session = $this->tokenExchange->ensureSession($shopDomain, $rawToken, $online);
         } catch (TokenExchangeException $e) {
             return $this->unauthorizedResponse('Token exchange failed: ' . $e->getMessage());
         }

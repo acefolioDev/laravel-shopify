@@ -73,6 +73,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Access Mode
+    |--------------------------------------------------------------------------
+    |
+    | 'offline' — long-lived tokens, not tied to a user session (default for
+    |             background jobs, webhooks, etc.)
+    | 'online'  — short-lived tokens tied to the current user session
+    |
+    | If your Shopify app configuration does not support offline token exchange,
+    | set this to 'online'.
+    |
+    */
+
+    'access_mode' => env('SHOPIFY_ACCESS_MODE', 'offline'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Session Storage
     |--------------------------------------------------------------------------
     |
