@@ -2,10 +2,11 @@
 
 namespace LaravelShopify\Http\Controllers;
 
-use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use LaravelShopify\Services\BillingService;
+use LaravelShopify\Support\ShopifyHelper;
 
 class BillingController extends Controller
 {
@@ -20,38 +21,26 @@ class BillingController extends Controller
      * Handle the billing callback after a merchant approves/declines a charge.
      *
      * Shopify redirects back here with the charge_id query parameter.
+     * After confirming the charge, we redirect back into the embedded app.
      */
-    public function callback(Request $request): JsonResponse
+    public function callback(Request $request): RedirectResponse
     {
         $shopDomain = $request->query('shop');
         $planSlug = $request->query('plan');
         $chargeId = $request->query('charge_id');
 
-        if (! $shopDomain || ! $planSlug || ! $chargeId) {
-            return response()->json([
-                'error' => 'Missing required parameters: shop, plan, charge_id.',
-            ], 400);
+        if ($shopDomain && $planSlug && $chargeId) {
+            try {
+                $this->billing->confirmCharge($shopDomain, $planSlug, $chargeId);
+            } catch (\Exception $e) {
+                // Log the error but still redirect back to the app
+                logger()->error('Billing confirmation failed: ' . $e->getMessage());
+            }
         }
 
-        try {
-            $plan = $this->billing->confirmCharge($shopDomain, $planSlug, $chargeId);
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to confirm charge: ' . $e->getMessage(),
-            ], 500);
-        }
+        // Redirect back into the embedded app inside Shopify Admin
+        $embeddedUrl = ShopifyHelper::embeddedAppUrl($shopDomain);
 
-        // Redirect back into the app within the Shopify Admin
-        $appUrl = config('shopify-app.app_url');
-        $redirectUrl = "https://{$shopDomain}/admin/apps/" . config('shopify-app.api_key');
-
-        return response()->json([
-            'success' => true,
-            'plan' => $plan->plan_name,
-            'status' => $plan->status,
-            'redirect_url' => $redirectUrl,
-        ])->withHeaders([
-            'Link' => '<' . $redirectUrl . '>; rel="app-bridge-redirect-endpoint"',
-        ]);
+        return redirect()->to($embeddedUrl);
     }
 }
