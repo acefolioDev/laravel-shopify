@@ -64,6 +64,26 @@ See `config/shopify-app.php` for all available options.
 
 ---
 
+## Security
+
+### Token Encryption at Rest
+
+All access tokens and refresh tokens are **encrypted at rest** using Laravel's `encrypted` cast (AES-256-CBC via your `APP_KEY`). This applies to both the `Shop` and `Session` models. Even if your database is compromised, tokens are useless without the application key.
+
+> **Important:** Ensure your `APP_KEY` is set and kept secret. Rotating the `APP_KEY` will invalidate all stored tokens — shops will need to re-authenticate.
+
+### Token Architecture
+
+The `Session` model is the **single source of truth** for access tokens and refresh tokens. The `Shop` model stores installation metadata (scopes, install status, expiry timestamps) but does not duplicate token secrets. This minimizes the attack surface for token extraction.
+
+Both models hide `access_token` and `refresh_token` from JSON serialization (`$hidden`), preventing accidental token leakage in API responses or logs.
+
+### Billing Callback Verification
+
+Billing callbacks are verified by querying the Shopify GraphQL Admin API to confirm the charge status before activating a plan locally. This prevents forged callback attacks where an attacker could hit the callback URL with a fabricated `charge_id`.
+
+---
+
 ## Authentication & Session Management
 
 ### Token Exchange (No OAuth Redirects)
@@ -310,8 +330,8 @@ $confirmationUrl = $billing->createCharge($shopDomain, $accessToken, 'pro');
 // Check active subscription
 $subscription = $billing->checkActiveSubscription($shopDomain, $accessToken);
 
-// Confirm after merchant approves
-$plan = $billing->confirmCharge($shopDomain, 'pro', $chargeId);
+// Confirm after merchant approves (verifies charge status with Shopify)
+$plan = $billing->confirmCharge($shopDomain, $accessToken, 'pro', $chargeId);
 ```
 
 ### App Bridge Redirect Pattern

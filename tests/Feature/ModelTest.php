@@ -33,14 +33,14 @@ class ModelTest extends TestCase
         $this->assertTrue($shop->is_installed);
     }
 
-    public function test_shop_needs_reauth_without_token(): void
+    public function test_shop_needs_reauth_without_session(): void
     {
         $shop = Shop::create([
             'shop_domain' => 'test-store.myshopify.com',
-            'access_token' => null,
             'is_installed' => true,
         ]);
 
+        // No offline session exists — needsReauth should return true
         $this->assertTrue($shop->needsReauth());
     }
 
@@ -48,10 +48,16 @@ class ModelTest extends TestCase
     {
         $shop = Shop::create([
             'shop_domain' => 'test-store.myshopify.com',
-            'access_token' => 'shpat_test',
             'scopes' => 'read_products,write_products',
             'is_installed' => true,
-            'token_expires_at' => now()->subHour(),
+        ]);
+
+        Session::create([
+            'session_id' => 'offline_test-store.myshopify.com',
+            'shop_domain' => 'test-store.myshopify.com',
+            'access_token' => 'shpat_test',
+            'is_online' => false,
+            'expires_at' => now()->subHour(),
         ]);
 
         $this->assertTrue($shop->isTokenExpired());
@@ -62,10 +68,16 @@ class ModelTest extends TestCase
     {
         $shop = Shop::create([
             'shop_domain' => 'test-store.myshopify.com',
-            'access_token' => 'shpat_test',
             'scopes' => 'read_products,write_products',
             'is_installed' => true,
-            'token_expires_at' => now()->addHour(),
+        ]);
+
+        Session::create([
+            'session_id' => 'offline_test-store.myshopify.com',
+            'shop_domain' => 'test-store.myshopify.com',
+            'access_token' => 'shpat_test',
+            'is_online' => false,
+            'expires_at' => now()->addHour(),
         ]);
 
         $this->assertFalse($shop->isTokenExpired());
@@ -76,9 +88,15 @@ class ModelTest extends TestCase
     {
         $shop = Shop::create([
             'shop_domain' => 'test-store.myshopify.com',
-            'access_token' => 'shpat_test',
             'scopes' => 'read_products', // Missing write_products
             'is_installed' => true,
+        ]);
+
+        Session::create([
+            'session_id' => 'offline_test-store.myshopify.com',
+            'shop_domain' => 'test-store.myshopify.com',
+            'access_token' => 'shpat_test',
+            'is_online' => false,
         ]);
 
         $this->assertTrue($shop->needsReauth());

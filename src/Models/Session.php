@@ -10,6 +10,8 @@ class Session extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
+        'access_token' => 'encrypted',
+        'refresh_token' => 'encrypted',
         'is_online' => 'boolean',
         'user_email_verified' => 'boolean',
         'account_owner' => 'boolean',

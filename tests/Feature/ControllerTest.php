@@ -52,13 +52,12 @@ class ControllerTest extends TestCase
         $response->assertJsonFragment(['error' => 'Missing required parameters: shop, plan, charge_id.']);
     }
 
-    public function test_billing_callback_with_all_params(): void
+    public function test_billing_callback_rejects_without_valid_session(): void
     {
-        // This will fail at confirmCharge (no pending plan in DB) but proves routing works
+        // No offline session exists for this shop — should return 401
         $response = $this->getJson('/shopify/billing/callback?shop=test.myshopify.com&plan=basic&charge_id=123');
 
-        $response->assertStatus(500); // Expected — no pending plan exists
-        $data = json_decode($response->getContent(), true);
-        $this->assertArrayHasKey('error', $data);
+        $response->assertStatus(401);
+        $response->assertJsonFragment(['error' => 'No valid session found for this shop. Please reinstall the app.']);
     }
 }

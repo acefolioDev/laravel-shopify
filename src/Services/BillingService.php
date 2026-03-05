@@ -266,15 +266,26 @@ class BillingService
     }
 
     /**
-     * Confirm a billing callback — activate the plan in the database.
+     * Confirm a billing callback — verify the charge with Shopify, then activate locally.
+     *
+     * @throws ShopifyApiException If the charge cannot be verified or is not active.
      */
-    public function confirmCharge(string $shopDomain, string $planSlug, string $chargeId): Plan
+    public function confirmCharge(string $shopDomain, string $accessToken, string $planSlug, string $chargeId): Plan
     {
         $plan = Plan::where('shop_domain', $shopDomain)
             ->where('plan_slug', $planSlug)
             ->where('status', 'pending')
             ->latest()
             ->firstOrFail();
+
+        // Verify the charge status with Shopify before activating locally
+        $verifiedStatus = $this->verifyChargeWithShopify($shopDomain, $accessToken, $chargeId);
+
+        if (! in_array($verifiedStatus, ['ACTIVE', 'ACCEPTED'], true)) {
+            throw new ShopifyApiException(
+                "Charge {$chargeId} is not active on Shopify. Status: {$verifiedStatus}"
+            );
+        }
 
         // Cancel any other active plans for this shop
         Plan::where('shop_domain', $shopDomain)
@@ -295,5 +306,42 @@ class BillingService
         ]);
 
         return $plan->fresh();
+    }
+
+    /**
+     * Verify a charge's status by querying the Shopify GraphQL Admin API.
+     *
+     * @throws ShopifyApiException If the charge cannot be found or the query fails.
+     */
+    public function verifyChargeWithShopify(string $shopDomain, string $accessToken, string $chargeId): string
+    {
+        $query = <<<'GRAPHQL'
+        query($id: ID!) {
+            node(id: $id) {
+                ... on AppSubscription {
+                    id
+                    status
+                    name
+                }
+                ... on AppPurchaseOneTime {
+                    id
+                    status
+                    name
+                }
+            }
+        }
+        GRAPHQL;
+
+        $result = $this->graphql->query($shopDomain, $accessToken, $query, ['id' => $chargeId]);
+
+        $node = $result['node'] ?? null;
+
+        if (! $node || ! isset($node['status'])) {
+            throw new ShopifyApiException(
+                "Unable to verify charge {$chargeId} with Shopify. Charge not found or invalid."
+            );
+        }
+
+        return $node['status'];
     }
 }

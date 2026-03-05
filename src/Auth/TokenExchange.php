@@ -145,8 +145,6 @@ class TokenExchange
         $shop = Shop::updateOrCreate(
             ['shop_domain' => $shopDomain],
             [
-                'access_token' => $tokenData['access_token'],
-                'refresh_token' => $tokenData['refresh_token'] ?? null,
                 'scopes' => $tokenData['scope'] ?? $this->scopes,
                 'is_installed' => true,
                 'installed_at' => now(),

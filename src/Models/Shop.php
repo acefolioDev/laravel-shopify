@@ -11,12 +11,19 @@ class Shop extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
+        'access_token' => 'encrypted',
+        'refresh_token' => 'encrypted',
         'is_installed' => 'boolean',
         'is_freemium' => 'boolean',
         'token_expires_at' => 'datetime',
         'installed_at' => 'datetime',
         'uninstalled_at' => 'datetime',
         'metadata' => 'array',
+    ];
+
+    protected $hidden = [
+        'access_token',
+        'refresh_token',
     ];
 
     public function getTable(): string
@@ -50,18 +57,22 @@ class Shop extends Model
 
     public function isTokenExpired(): bool
     {
-        if (! $this->token_expires_at) {
+        $session = $this->offlineSession;
+
+        if (! $session || ! $session->expires_at) {
             return false;
         }
 
         $buffer = config('shopify-app.offline_tokens.refresh_buffer_seconds', 300);
 
-        return $this->token_expires_at->subSeconds($buffer)->isPast();
+        return $session->expires_at->subSeconds($buffer)->isPast();
     }
 
     public function needsReauth(): bool
     {
-        if (! $this->access_token) {
+        $session = $this->offlineSession;
+
+        if (! $session || ! $session->access_token) {
             return true;
         }
 
