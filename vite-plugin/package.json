@@ -1,0 +1,12 @@
+{
+    "name": "vite-plugin-shopify-app-bridge",
+    "version": "1.0.0",
+    "description": "Vite plugin that automatically injects the Shopify App Bridge 4 CDN script and configures HMR for embedded apps.",
+    "main": "index.js",
+    "type": "module",
+    "keywords": ["vite", "shopify", "app-bridge", "laravel"],
+    "license": "MIT",
+    "peerDependencies": {
+        "vite": "^5.0.0 || ^6.0.0"
+    }
+}

@@ -1,0 +1,38 @@
+<?php
+
+namespace App\Jobs\Shopify;
+
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
+
+class {{ className }} implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public string $shopDomain;
+    public array $data;
+    public string $topic;
+    public string $apiVersion;
+
+    public function __construct(string $shopDomain, array $data, string $topic, string $apiVersion)
+    {
+        $this->shopDomain = $shopDomain;
+        $this->data = $data;
+        $this->topic = $topic;
+        $this->apiVersion = $apiVersion;
+    }
+
+    public function handle(): void
+    {
+        Log::info("Shopify webhook: {{ topic }}", [
+            'shop' => $this->shopDomain,
+            'data_id' => $this->data['id'] ?? null,
+        ]);
+
+        // TODO: Implement your webhook handling logic here
+    }
+}
