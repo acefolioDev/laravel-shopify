@@ -142,18 +142,32 @@ class TokenExchange
             ->where('is_installed', true)
             ->exists();
 
+        $shopData = [
+            'access_token' => $tokenData['access_token'],
+            'refresh_token' => $tokenData['refresh_token'] ?? null,
+            'scopes' => $tokenData['scope'] ?? $this->scopes,
+            'is_installed' => true,
+            'installed_at' => now(),
+            'token_expires_at' => isset($tokenData['expires_in'])
+                ? Carbon::now()->addSeconds($tokenData['expires_in'])
+                : null,
+        ];
+
+        // Fetch shop metadata from Shopify API to populate shop details
+        $shopDetails = $this->fetchShopDetails($shopDomain, $tokenData['access_token']);
+        if ($shopDetails) {
+            $shopData['shop_name'] = $shopDetails['name'] ?? null;
+            $shopData['email'] = $shopDetails['email'] ?? null;
+            $shopData['shop_owner'] = $shopDetails['shop_owner'] ?? null;
+            $shopData['country'] = $shopDetails['country_name'] ?? null;
+            $shopData['currency'] = $shopDetails['currency'] ?? null;
+            $shopData['timezone'] = $shopDetails['iana_timezone'] ?? null;
+            $shopData['plan_name'] = $shopDetails['plan_display_name'] ?? null;
+        }
+
         $shop = Shop::updateOrCreate(
             ['shop_domain' => $shopDomain],
-            [
-                'access_token' => $tokenData['access_token'],
-                'refresh_token' => $tokenData['refresh_token'] ?? null,
-                'scopes' => $tokenData['scope'] ?? $this->scopes,
-                'is_installed' => true,
-                'installed_at' => now(),
-                'token_expires_at' => isset($tokenData['expires_in'])
-                    ? Carbon::now()->addSeconds($tokenData['expires_in'])
-                    : null,
-            ]
+            $shopData
         );
 
         $sessionId = $online
@@ -198,6 +212,39 @@ class TokenExchange
         }
 
         return $session;
+    }
+
+    /**
+     * Fetch shop details from the Shopify REST Admin API.
+     *
+     * @return array|null The shop data array, or null on failure.
+     */
+    protected function fetchShopDetails(string $shopDomain, string $accessToken): ?array
+    {
+        $apiVersion = config('shopify-app.api_version', '2025-01');
+
+        try {
+            $response = $this->httpClient->get(
+                "https://{$shopDomain}/admin/api/{$apiVersion}/shop.json",
+                [
+                    'headers' => [
+                        'X-Shopify-Access-Token' => $accessToken,
+                        'Accept' => 'application/json',
+                    ],
+                ]
+            );
+
+            $body = json_decode($response->getBody()->getContents(), true);
+
+            return $body['shop'] ?? null;
+        } catch (\Exception $e) {
+            Log::warning('Failed to fetch shop details during token exchange', [
+                'shop' => $shopDomain,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     /**
