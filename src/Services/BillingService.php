@@ -32,7 +32,7 @@ class BillingService
             'plan' => $planSlug,
         ]);
 
-        if ($planConfig['type'] === 'recurring') {
+        if (in_array($planConfig['type'], ['recurring', 'usage'])) {
             return $this->createRecurringCharge($shopDomain, $accessToken, $planSlug, $planConfig, $returnUrl);
         }
 
@@ -63,14 +63,18 @@ class BillingService
             ],
         ];
 
-        // Add usage-based pricing if capped_amount is set
+        // Add usage-based pricing as a separate line item if capped_amount is set
         if (! empty($planConfig['capped_amount'])) {
-            $lineItems[0]['plan']['appUsagePricingDetails'] = [
-                'cappedAmount' => [
-                    'amount' => $planConfig['capped_amount'],
-                    'currencyCode' => $planConfig['currency'] ?? 'USD',
+            $lineItems[] = [
+                'plan' => [
+                    'appUsagePricingDetails' => [
+                        'cappedAmount' => [
+                            'amount' => $planConfig['capped_amount'],
+                            'currencyCode' => $planConfig['currency'] ?? 'USD',
+                        ],
+                        'terms' => $planConfig['terms'] ?? 'Usage charges',
+                    ],
                 ],
-                'terms' => $planConfig['terms'] ?? 'Usage charges',
             ];
         }
 
@@ -274,7 +278,13 @@ class BillingService
             ->where('plan_slug', $planSlug)
             ->where('status', 'pending')
             ->latest()
-            ->firstOrFail();
+            ->first();
+
+        if (! $plan) {
+            throw new ShopifyApiException(
+                "No pending plan '{$planSlug}' found for shop '{$shopDomain}' to confirm."
+            );
+        }
 
         // Cancel any other active plans for this shop
         Plan::where('shop_domain', $shopDomain)

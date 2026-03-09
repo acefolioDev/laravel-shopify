@@ -29,13 +29,18 @@ class BillingController extends Controller
         $planSlug = $request->query('plan');
         $chargeId = $request->query('charge_id');
 
-        if ($shopDomain && $planSlug && $chargeId) {
-            try {
-                $this->billing->confirmCharge($shopDomain, $planSlug, $chargeId);
-            } catch (\Exception $e) {
-                // Log the error but still redirect back to the app
-                logger()->error('Billing confirmation failed: ' . $e->getMessage());
-            }
+        if (! $shopDomain || ! $planSlug || ! $chargeId) {
+            logger()->warning('Billing callback received with missing parameters.', $request->query());
+            return redirect()->to(ShopifyHelper::embeddedAppUrl($shopDomain ?? ''))
+                ->with('billing_error', 'Invalid billing callback — missing required parameters.');
+        }
+
+        try {
+            $this->billing->confirmCharge($shopDomain, $planSlug, $chargeId);
+        } catch (\Exception $e) {
+            logger()->error('Billing confirmation failed: ' . $e->getMessage());
+            return redirect()->to(ShopifyHelper::embeddedAppUrl($shopDomain))
+                ->with('billing_error', $e->getMessage());
         }
 
         // Redirect back into the embedded app inside Shopify Admin
